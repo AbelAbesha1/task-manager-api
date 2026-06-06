@@ -2,11 +2,15 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Microsoft.OpenApi.Models;
 using System.Text;
 using TaskManager.API.Data;
 using TaskManager.API.Helpers;
+using TaskManager.API.Repositories;
+using TaskManager.API.Repositories.Interfaces;
 using TaskManager.API.Services;
-using Microsoft.OpenApi.Models;
+using TaskManager.API.Repositories;
+using TaskManager.API.Repositories.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +23,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddScoped<JwtHelper>();
+
+// Repositories
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<ITaskRepository, TaskRepository>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -75,6 +83,7 @@ builder.Services.AddControllers();
 var app = builder.Build();
 
 // Middleware pipeline
+app.UseGlobalExceptionHandler();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseHttpsRedirection();

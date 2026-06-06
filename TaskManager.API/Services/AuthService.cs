@@ -1,32 +1,27 @@
-﻿using Microsoft.EntityFrameworkCore;
-using TaskManager.API.Data;
-using TaskManager.API.DTOs.Auth;
+﻿using TaskManager.API.DTOs.Auth;
 using TaskManager.API.Helpers;
 using TaskManager.API.Models;
-using BCrypt.Net;
+using TaskManager.API.Repositories.Interfaces;
+
 namespace TaskManager.API.Services
 {
     public class AuthService
     {
-        private readonly AppDbContext _context;
+        private readonly IUserRepository _userRepo;
         private readonly JwtHelper _jwtHelper;
 
-        public AuthService(AppDbContext context, JwtHelper jwtHelper)
+        public AuthService(IUserRepository userRepo, JwtHelper jwtHelper)
         {
-            _context = context;
+            _userRepo = userRepo;
             _jwtHelper = jwtHelper;
         }
 
-        public async Task<AuthResponseDto?> RegisterAsync(RegisterDto dto)
+        public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
         {
-            // Check if email already exists
-            var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var emailExists = await _userRepo.EmailExistsAsync(dto.Email);
+            if (emailExists)
+                throw new ConflictException("Email is already in use.");
 
-            if (existingUser != null)
-                return null; // Email taken
-
-            // Hash the password — never store plain text
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
 
             var user = new User
@@ -37,35 +32,28 @@ namespace TaskManager.API.Services
                 Role = "User"
             };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            var token = _jwtHelper.GenerateToken(user);
+            await _userRepo.CreateAsync(user);
 
             return new AuthResponseDto
             {
-                Token = token,
+                Token = _jwtHelper.GenerateToken(user),
                 FullName = user.FullName,
                 Email = user.Email,
                 Role = user.Role
             };
         }
 
-        public async Task<AuthResponseDto?> LoginAsync(LoginDto dto)
+        public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
         {
-            // Find user by email
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var user = await _userRepo.GetByEmailAsync(dto.Email);
 
-            // Verify password against hash
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-                return null;
-
-            var token = _jwtHelper.GenerateToken(user!);
+            if (user == null ||
+                !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+                throw new BadRequestException("Invalid email or password.");
 
             return new AuthResponseDto
             {
-                Token = token,
+                Token = _jwtHelper.GenerateToken(user),
                 FullName = user.FullName,
                 Email = user.Email,
                 Role = user.Role

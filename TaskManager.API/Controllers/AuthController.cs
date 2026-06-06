@@ -19,10 +19,6 @@ namespace TaskManager.API.Controllers
         public async Task<IActionResult> Register(RegisterDto dto)
         {
             var result = await _authService.RegisterAsync(dto);
-
-            if (result == null)
-                return BadRequest(new { message = "Email already in use." });
-
             return Ok(result);
         }
 
@@ -30,10 +26,6 @@ namespace TaskManager.API.Controllers
         public async Task<IActionResult> Login(LoginDto dto)
         {
             var result = await _authService.LoginAsync(dto);
-
-            if (result == null)
-                return Unauthorized(new { message = "Invalid email or password." });
-
             return Ok(result);
         }
     }

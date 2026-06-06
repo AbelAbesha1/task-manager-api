@@ -1,54 +1,35 @@
-﻿using Microsoft.EntityFrameworkCore;
-using TaskManager.API.Data;
-using TaskManager.API.DTOs.Tasks;
+﻿using TaskManager.API.DTOs.Tasks;
+using TaskManager.API.Helpers;
 using TaskManager.API.Models;
+using TaskManager.API.Repositories.Interfaces;
 
 namespace TaskManager.API.Services
 {
     public class TaskService
     {
-        private readonly AppDbContext _context;
+        private readonly ITaskRepository _taskRepo;
 
-        public TaskService(AppDbContext context)
+        public TaskService(ITaskRepository taskRepo)
         {
-            _context = context;
+            _taskRepo = taskRepo;
         }
 
         public async Task<List<TaskResponseDto>> GetAllAsync(int userId)
         {
-            return await _context.Tasks
-                .Where(t => t.UserId == userId)
-                .Select(t => new TaskResponseDto
-                {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Description = t.Description,
-                    IsCompleted = t.IsCompleted,
-                    Priority = t.Priority,
-                    DueDate = t.DueDate,
-                    CreatedAt = t.CreatedAt
-                })
-                .ToListAsync();
+            var tasks = await _taskRepo.GetAllByUserIdAsync(userId);
+            return tasks.Select(MapToDto).ToList();
         }
 
-        public async Task<TaskResponseDto?> GetByIdAsync(int id, int userId)
+        public async Task<TaskResponseDto> GetByIdAsync(int id, int userId)
         {
-            return await _context.Tasks
-                .Where(t => t.Id == id && t.UserId == userId)
-                .Select(t => new TaskResponseDto
-                {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Description = t.Description,
-                    IsCompleted = t.IsCompleted,
-                    Priority = t.Priority,
-                    DueDate = t.DueDate,
-                    CreatedAt = t.CreatedAt
-                })
-                .FirstOrDefaultAsync();
+            var task = await _taskRepo.GetByIdAndUserIdAsync(id, userId);
+            if (task == null)
+                throw new NotFoundException("Task", id);
+            return MapToDto(task);
         }
 
-        public async Task<TaskResponseDto> CreateAsync(CreateTaskDto dto, int userId)
+        public async Task<TaskResponseDto> CreateAsync(
+            CreateTaskDto dto, int userId)
         {
             var task = new TaskItem
             {
@@ -59,27 +40,16 @@ namespace TaskManager.API.Services
                 UserId = userId
             };
 
-            _context.Tasks.Add(task);
-            await _context.SaveChangesAsync();
-
-            return new TaskResponseDto
-            {
-                Id = task.Id,
-                Title = task.Title,
-                Description = task.Description,
-                IsCompleted = task.IsCompleted,
-                Priority = task.Priority,
-                DueDate = task.DueDate,
-                CreatedAt = task.CreatedAt
-            };
+            await _taskRepo.CreateAsync(task);
+            return MapToDto(task);
         }
 
-        public async Task<TaskResponseDto?> UpdateAsync(int id, UpdateTaskDto dto, int userId)
+        public async Task<TaskResponseDto> UpdateAsync(
+            int id, UpdateTaskDto dto, int userId)
         {
-            var task = await _context.Tasks
-                .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
-
-            if (task == null) return null;
+            var task = await _taskRepo.GetByIdAndUserIdAsync(id, userId);
+            if (task == null)
+                throw new NotFoundException("Task", id);
 
             task.Title = dto.Title;
             task.Description = dto.Description;
@@ -87,9 +57,22 @@ namespace TaskManager.API.Services
             task.Priority = dto.Priority;
             task.DueDate = dto.DueDate;
 
-            await _context.SaveChangesAsync();
+            await _taskRepo.UpdateAsync(task);
+            return MapToDto(task);
+        }
 
-            return new TaskResponseDto
+        public async Task DeleteAsync(int id, int userId)
+        {
+            var task = await _taskRepo.GetByIdAndUserIdAsync(id, userId);
+            if (task == null)
+                throw new NotFoundException("Task", id);
+
+            await _taskRepo.DeleteAsync(task);
+        }
+
+        // Private mapper — keeps mapping logic in one place
+        private static TaskResponseDto MapToDto(TaskItem task) =>
+            new TaskResponseDto
             {
                 Id = task.Id,
                 Title = task.Title,
@@ -99,18 +82,5 @@ namespace TaskManager.API.Services
                 DueDate = task.DueDate,
                 CreatedAt = task.CreatedAt
             };
-        }
-
-        public async Task<bool> DeleteAsync(int id, int userId)
-        {
-            var task = await _context.Tasks
-                .FirstOrDefaultAsync(t => t.Id == id && t.UserId == userId);
-
-            if (task == null) return false;
-
-            _context.Tasks.Remove(task);
-            await _context.SaveChangesAsync();
-            return true;
-        }
     }
 }

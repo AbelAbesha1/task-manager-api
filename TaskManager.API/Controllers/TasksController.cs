@@ -51,12 +51,10 @@ namespace TaskManager.API.Controllers
             if (task == null) return NotFound();
             return Ok(task);
         }
-
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var deleted = await _taskService.DeleteAsync(id, GetUserId());
-            if (!deleted) return NotFound();
+            await _taskService.DeleteAsync(id, GetUserId());
             return NoContent();
         }
     }
